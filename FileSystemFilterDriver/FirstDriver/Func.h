@@ -1,12 +1,14 @@
 #pragma once
 //#include<ntifs.h>
 
-NTSTATUS FSCreateDevice(PDRIVER_OBJECT pDriverObject);
-VOID DriverUnload(IN PDRIVER_OBJECT pDriverObject);
 
+VOID DriverUnload(IN PDRIVER_OBJECT pDriverObject);
+VOID FSChangeNotify(IN PDEVICE_OBJECT pDeviceObject, IN BOOLEAN FSActive);
+VOID FSGetFileName(IN PDEVICE_OBJECT pDeviceObject);
+NTSTATUS FSCreateDevice(PDRIVER_OBJECT pDriverObject);
 NTSTATUS FSIrpDefault(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp);
 NTSTATUS FSGetObjectName(IN PVOID pObject, IN OUT PUNICODE_STRING *pName);
-VOID FSChangeNotify(IN PDEVICE_OBJECT pDeviceObject, IN BOOLEAN FSActive);
+
 NTSTATUS FSAttachToFileSystemControlDevice(IN PDEVICE_OBJECT pDeviceObject, IN PUNICODE_STRING pDeviceObjectName);
 NTSTATUS FSDetachFromFileSystemControlDevice(IN PDEVICE_OBJECT pDeviceObject);
 BOOLEAN FSIsAttachedDevice(IN PDEVICE_OBJECT pDeviceObject);
@@ -20,9 +22,15 @@ NTSTATUS FSMinorIrpMountVolume(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp);
 
 
 NTSTATUS FSIrpFileSystemControl(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp);
+NTSTATUS FSIrpSetInfo(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp);
+
+NTSTATUS FSIrpCreate(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp);
 NTSTATUS FSIrpRead(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp);
 NTSTATUS FSIrpWrite(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp);
+NTSTATUS FSIrpClose(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp);
 NTSTATUS FSReadComplete(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp, IN PVOID pContext);
+NTSTATUS FSCreateComplete(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp, IN PVOID pContext);
+NTSTATUS FSCloseComplete(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp, IN PVOID pContext);
 NTSTATUS FSMountDeviceComplete(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp, IN PVOID pContext);
 NTSTATUS FSLoadFileSystemComplete(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp, IN PVOID pContext);
 

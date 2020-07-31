@@ -8,9 +8,10 @@
 #include"Func.h"
 
 
-PDRIVER_OBJECT g_pstDriverObject;
-PDEVICE_OBJECT g_pstControlDeviceObject;
-FAST_MUTEX g_stAttachLock;
+
+extern PDRIVER_OBJECT g_pstDriverObject;
+extern PDEVICE_OBJECT g_pstControlDeviceObject;
+extern FAST_MUTEX g_stAttachLock;
 
 
 

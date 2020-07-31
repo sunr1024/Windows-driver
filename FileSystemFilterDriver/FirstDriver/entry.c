@@ -1,13 +1,21 @@
 #include"entry.h"
 
 
+PDRIVER_OBJECT g_pstDriverObject = NULL;
+PDEVICE_OBJECT g_pstControlDeviceObject = NULL;
+FAST_MUTEX g_stAttachLock;
 
+/**************************************************
+@author		  : Sunr
+@create time  : 0200730
+@last   time  : 20200730
+@description  : Set Unload routine, irp dispatch routine, fast io routine, callback function and create device
+**************************************************/
 #pragma INITCODE
 NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObject, IN PUNICODE_STRING pRegistryPath)
 {
 	PAGED_CODE();
 
-	ULONG i;
 
 	UNREFERENCED_PARAMETER(pRegistryPath);
 	KdPrint(("Enter DriverEntry\n"));
@@ -21,20 +29,25 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObject, IN PUNICODE_STRING pRegist
 
 	pDriverObject->DriverUnload = DriverUnload;
 
-	//set irp routine
-	for (i = 0; i < IRP_MJ_MAXIMUM_FUNCTION; i++) {
+	//Set irp routine
+	for ( ULONG i = 0; i < IRP_MJ_MAXIMUM_FUNCTION; i++) {
 		pDriverObject->MajorFunction[i] = FSIrpDefault;
 	}
-	
-	pDriverObject->MajorFunction[IRP_MJ_SYSTEM_CONTROL] = FSIrpFileSystemControl;
+
+	pDriverObject->MajorFunction[IRP_MJ_FILE_SYSTEM_CONTROL] = FSIrpFileSystemControl;
+	pDriverObject->MajorFunction[IRP_MJ_CREATE] = FSIrpCreate;
 	pDriverObject->MajorFunction[IRP_MJ_READ] = FSIrpRead;
 	pDriverObject->MajorFunction[IRP_MJ_WRITE] = FSIrpWrite;
+	//pDriverObject->MajorFunction[IRP_MJ_CLEANUP] = FSIrpClose;
+	pDriverObject->MajorFunction[IRP_MJ_CLOSE] = FSIrpClose;
+	pDriverObject->MajorFunction[IRP_MJ_SET_INFORMATION] = FSIrpSetInfo;
+
 	
-	//set Fast I/O routine
+	//Set Fast I/O routine
 	PFAST_IO_DISPATCH pFastIoDispatch = NULL;
 	pFastIoDispatch = (PFAST_IO_DISPATCH)ExAllocatePoolWithTag( NonPagedPool, sizeof(FAST_IO_DISPATCH), FAST_IO_DISPATCH_TAG);
 
-	if (!pFastIoDispatch) {
+	if (NULL == pFastIoDispatch) {
 		KdPrint(("FileSystemFilter!DriverEntry: "
 			"Allocate memory for fast io dispatch failed.\r\n"));
 		return STATUS_INSUFFICIENT_RESOURCES;
@@ -67,7 +80,7 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObject, IN PUNICODE_STRING pRegist
 
 	pDriverObject->FastIoDispatch = pFastIoDispatch;
 
-
+	//Register the call back when file system has change
 	status = IoRegisterFsRegistrationChange(pDriverObject, FSChangeNotify);
 
 	if (!NT_SUCCESS(status))
@@ -81,13 +94,17 @@ NTSTATUS DriverEntry(IN PDRIVER_OBJECT pDriverObject, IN PUNICODE_STRING pRegist
 
 	KdPrint(("DriverEntry end\n"));
 	return status;
-
 }
 
 
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Free memory
+**************************************************/
 
-
-
+#pragma PAGEDCODE
 VOID DriverUnload(IN PDRIVER_OBJECT pDriverObject)
 {
 	PAGED_CODE();
@@ -181,6 +198,14 @@ VOID DriverUnload(IN PDRIVER_OBJECT pDriverObject)
 	}
 }
 
+
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Create device
+**************************************************/
+
 NTSTATUS FSCreateDevice(PDRIVER_OBJECT pDriverObject)
 {
 	PAGED_CODE();
@@ -189,32 +214,41 @@ NTSTATUS FSCreateDevice(PDRIVER_OBJECT pDriverObject)
 	UNICODE_STRING nameString;
 	RtlInitUnicodeString(&nameString, CONTROL_DEVICE_NAME);
 
-	//create device object
+	//Create device object
 	status = IoCreateDevice(pDriverObject, 0, &nameString, FILE_DEVICE_DISK_FILE_SYSTEM, FILE_DEVICE_SECURE_OPEN, FALSE, &g_pstControlDeviceObject);
 
-	//path not find
-	if (status == STATUS_OBJECT_PATH_NOT_FOUND) {
+	//Path not find
+	if (status == STATUS_OBJECT_PATH_NOT_FOUND) 
+	{
 		RtlInitUnicodeString(&nameString, OLD_CONTROL_DEVICE_NAME);
 		status = IoCreateDevice(pDriverObject, 0, &nameString, FILE_DEVICE_DISK_FILE_SYSTEM, FILE_DEVICE_SECURE_OPEN, FALSE, &g_pstControlDeviceObject);
 
 
-		if (!NT_SUCCESS(status)) {
+		if (!NT_SUCCESS(status)) 
+		{
 			KdPrint(("FileSystemFilter!FsFilterAddDevice: "
 				"Create \"%wZ\" deivce failed.\r\n",
 				&nameString));
 			return status;
 		}
 	}
-	else if (!NT_SUCCESS(status)) {
+	else if (!NT_SUCCESS(status)) 
+	{
 		KdPrint(("FileSystemFilter!FsFilterAddDevice: "
 			"Create \"%wZ\" deivce failed.\r\n",
 			&nameString));
 		return status;
 	}
-	return status;
+	return STATUS_SUCCESS;
 }
 
-//get device object list of file system driver, create filter and attach to the device if it is my target device, then save the name of device free the resource, until all device has been operated.
+
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Get device object list of file system driver, create filter and attach to the device if it is my target device, then save the name of device free the resource, until all device has been operated.
+**************************************************/
 #pragma PAGEDCODE
 NTSTATUS FSAttachToMountedVolumeDevice(IN PDEVICE_OBJECT pFSControlDeviceObject)
 {
@@ -227,10 +261,11 @@ NTSTATUS FSAttachToMountedVolumeDevice(IN PDEVICE_OBJECT pFSControlDeviceObject)
 
 	do
 	{
-		//get number of device object
+		//Get number of device object
 		status = IoEnumerateDeviceObjectList(pFSControlDeviceObject->DriverObject, NULL, 0, &ulDeviceObjectNumber);
 
-		if (!NT_SUCCESS(status) && STATUS_BUFFER_TOO_SMALL != status) {
+		if (!NT_SUCCESS(status) && STATUS_BUFFER_TOO_SMALL != status) 
+		{
 			KdPrint(("FileSystemFilter!FSAttachToMountedVolumeDevice: "
 				"Get number device objectk failed.\r\n"));
 			break;
@@ -238,10 +273,11 @@ NTSTATUS FSAttachToMountedVolumeDevice(IN PDEVICE_OBJECT pFSControlDeviceObject)
 
 		ulDeviceObjectListSize = sizeof(PDEVICE_OBJECT)*ulDeviceObjectNumber;
 
-		//allocate memory
+		//Allocate memory
 		apstDeviceObjectList = (PDEVICE_OBJECT *)ExAllocatePoolWithTag(PagedPool, ulDeviceObjectListSize, DEVICE_OBJECT_LIST_TAG);
 
-		if (NULL == apstDeviceObjectList) {
+		if (NULL == apstDeviceObjectList) 
+		{
 			KdPrint(("ExAllocatePoolWithTag failed.\r\n"));
 			break;
 		}
@@ -249,26 +285,30 @@ NTSTATUS FSAttachToMountedVolumeDevice(IN PDEVICE_OBJECT pFSControlDeviceObject)
 		//get device object list
 		status = IoEnumerateDeviceObjectList(pFSControlDeviceObject->DriverObject, apstDeviceObjectList, ulDeviceObjectListSize, &ulDeviceObjectNumber);
 
-		if (!NT_SUCCESS(status)) {
+		if (!NT_SUCCESS(status)) 
+		{
 			KdPrint(("IoEnumerateDeviceObjectList failed.\r\n"));
 			break;
 		}
 
-		//get lock
+		//Get lock
 		ExAcquireFastMutex(&g_stAttachLock);
-		//create filter device and attach
-		for (ULONG i = 0; i < ulDeviceObjectNumber; i++) {
-			//normal check
-			if (NULL == apstDeviceObjectList[i]) {
+		//Create filter device and attach
+		for (ULONG i = 0; i < ulDeviceObjectNumber; i++) 
+		{
+			//Normal check
+			if (NULL == apstDeviceObjectList[i]) 
+			{
 				continue;
 			}
 
-			//check the device is my target and it's  not a control device
-			if (pFSControlDeviceObject == apstDeviceObjectList[i] || (pFSControlDeviceObject->DeviceType != apstDeviceObjectList[i]->DeviceType) || FSIsAttachedDevice(apstDeviceObjectList[i])) {
+			//Check the device is my target and it's  not a control device
+			if (pFSControlDeviceObject == apstDeviceObjectList[i] || (pFSControlDeviceObject->DeviceType != apstDeviceObjectList[i]->DeviceType) || FSIsAttachedDevice(apstDeviceObjectList[i])) 
+			{
 				continue;
 			}
 
-			//create device
+			//Create device
 			PDEVICE_OBJECT pFilterDeviceObject = NULL;
 			status = IoCreateDevice(g_pstDriverObject, sizeof(DEVICE_EXTENSION), NULL, apstDeviceObjectList[i]->DeviceType, 0, FALSE, &pFilterDeviceObject);
 
@@ -279,7 +319,7 @@ NTSTATUS FSAttachToMountedVolumeDevice(IN PDEVICE_OBJECT pFSControlDeviceObject)
 				continue;
 			}
 
-			//set flags same as device is attached
+			//Set flags same as device is attached
 			if (FlagOn(pFSControlDeviceObject->Flags, DO_BUFFERED_IO))
 			{
 				SetFlag(pFilterDeviceObject->Flags, DO_BUFFERED_IO);
@@ -290,20 +330,19 @@ NTSTATUS FSAttachToMountedVolumeDevice(IN PDEVICE_OBJECT pFSControlDeviceObject)
 				SetFlag(pFilterDeviceObject->Flags, DO_DIRECT_IO);
 			}
 
-			if (FlagOn(pFSControlDeviceObject->Characteristics,
-				FILE_DEVICE_SECURE_OPEN))
+			if (FlagOn(pFSControlDeviceObject->Characteristics,FILE_DEVICE_SECURE_OPEN))
 			{
-				SetFlag(pFilterDeviceObject->Characteristics,
-					FILE_DEVICE_SECURE_OPEN);
+				SetFlag(pFilterDeviceObject->Characteristics,FILE_DEVICE_SECURE_OPEN);
 			}
 
-			//get device extension of filter device
+			//Get device extension of filter device
 			PDEVICE_EXTENSION pFilterDeviceExtension = (PDEVICE_EXTENSION)pFilterDeviceObject->DeviceExtension;
 
-			//get real device
+			//Get real device
 			status = IoGetDiskDeviceObject(apstDeviceObjectList[i], &pFilterDeviceExtension->pstStorageDeviceObject);
 
-			if (!NT_SUCCESS(status)) {
+			if (!NT_SUCCESS(status)) 
+			{
 				KdPrint(("FileSystemFilter!"
 					"FSAttachToMountedVolumeDevice: "
 					"Get real device failed.\r\n"));
@@ -311,44 +350,47 @@ NTSTATUS FSAttachToMountedVolumeDevice(IN PDEVICE_OBJECT pFSControlDeviceObject)
 				continue;
 			}
 
-			//get name of volume device
+			//Get name of volume device
 			PUNICODE_STRING pVolumeDeviceName = NULL;
 			status = FSGetObjectName(apstDeviceObjectList[i], &pVolumeDeviceName);
 
-			if (!NT_SUCCESS(status)) {
+			if (!NT_SUCCESS(status)) 
+			{
 				KdPrint(("FileSystemFilter!"
 					"FSAttachToMountedVolumeDevice: "
 					"Get name of volume deivce failed.\r\n"));
 			}
 
-			//attach filter device to mounted volume device
+			//Attach filter device to mounted volume device
 			ASSERT(NULL != pVolumeDeviceName);
 			ASSERT(NULL != pFilterDeviceExtension);
 
 			status = IoAttachDeviceToDeviceStackSafe(pFilterDeviceObject, apstDeviceObjectList[i], &pFilterDeviceExtension->pstNextDeviceObject);
 
-			if (!NT_SUCCESS(status)) {
+			if (!NT_SUCCESS(status)) 
+			{
 				KdPrint(("FileSystemFilter!"
 					"FSAttachToMountedVolumeDevice: "
 					"Attach to %wZ failed.\r\n",
 					pVolumeDeviceName));
 			}
 
-			//save the name of volume device
+			//Save the name of volume device
 			RtlCopyUnicodeString(&pFilterDeviceExtension->ustrDeviceName, pVolumeDeviceName);
 
-			//free the resource of device name
-			if (NULL != pVolumeDeviceName) {
+			//Free the resource of device name
+			if (NULL != pVolumeDeviceName) 
+			{
 				POBJECT_NAME_INFORMATION pObjectNameInfo = CONTAINING_RECORD(pVolumeDeviceName, OBJECT_NAME_INFORMATION, Name);
 				ExFreePoolWithTag(pObjectNameInfo, OBJECT_NAME_TAG);
 				pObjectNameInfo = NULL;
 			}
 
-			//set initialization has finished
+			//Set initialization has finished
 			ClearFlag(pFilterDeviceObject->Flags, DO_DEVICE_INITIALIZING);
-		}//if create filter device and attach END
+		}
 
-		//release lock
+		//Release lock
 		ExReleaseFastMutex(&g_stAttachLock);
 
 		return STATUS_SUCCESS;
@@ -357,15 +399,19 @@ NTSTATUS FSAttachToMountedVolumeDevice(IN PDEVICE_OBJECT pFSControlDeviceObject)
 	return status;
 }
 
-
-
-//get the file system driver's object name,directly return if it's a recognizer.Then , create filter device object and attach.Record the name of device is attached
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Get the file system driver's object name,directly return if it's a recognizer.Then , create filter device object and attach.Record the name of device is attached.
+**************************************************/
 #pragma PAGEDCODE
 NTSTATUS FSAttachToFileSystemControlDevice(IN PDEVICE_OBJECT pDeviceObject, IN PUNICODE_STRING pDeviceObjectName)
 {
 	PAGED_CODE();
 
-	if (!IS_TARGET_DEVICE_TYPE(pDeviceObject->DeviceType)) {
+	if (!IS_TARGET_DEVICE_TYPE(pDeviceObject->DeviceType)) 
+	{
 		return STATUS_SUCCESS;
 	}
 
@@ -378,36 +424,43 @@ NTSTATUS FSAttachToFileSystemControlDevice(IN PDEVICE_OBJECT pDeviceObject, IN P
 	{
 		status = FSGetObjectName(pDeviceObject->DriverObject, &pustrDriverObjectName);
 
-		if (!NT_SUCCESS(status)) {
+		if (!NT_SUCCESS(status)) 
+		{
 			break;
 		}
 		RtlInitUnicodeString(&ustrFSRecName, FILE_SYSTEM_REC_NAME);
 
-		if (RtlCompareUnicodeString(pustrDriverObjectName, &ustrFSRecName, TRUE) == 0) {
+		if (RtlCompareUnicodeString(pustrDriverObjectName, &ustrFSRecName, TRUE) == 0) 
+		{
 			return STATUS_SUCCESS;
 		}
 
-		//create filter device for control device of file system
+		//Create filter device for control device of file system
 		status = IoCreateDevice(g_pstDriverObject, sizeof(DEVICE_EXTENSION), NULL, pDeviceObject->DeviceType, 0, FALSE, &pFilterDeviceObject);
-		if (!NT_SUCCESS(status)) {
+		if (!NT_SUCCESS(status)) 
+		{
 			KdPrint(("FileSystemFilter!FSAttachFileSystemControlDevice: "
 				"Create filter device object filed.\r\n"));
 			break;
 		}
 
-		//set flags same as device is attached
-		if (FlagOn(pDeviceObject->Flags, DO_BUFFERED_IO)) {
+		//Set flags same as device is attached
+		if (FlagOn(pDeviceObject->Flags, DO_BUFFERED_IO)) 
+		{
 			SetFlag(pFilterDeviceObject->Flags, DO_BUFFERED_IO);
 		}
-		if (FlagOn(pDeviceObject->Flags, DO_DIRECT_IO)) {
+		if (FlagOn(pDeviceObject->Flags, DO_DIRECT_IO)) 
+		{
 			SetFlag(pFilterDeviceObject->Flags, DO_DIRECT_IO);
 		}
-		if (FlagOn(pDeviceObject->Characteristics, FILE_DEVICE_SECURE_OPEN)) {
+		if (FlagOn(pDeviceObject->Characteristics, FILE_DEVICE_SECURE_OPEN)) 
+		{
 			SetFlag(pFilterDeviceObject->Characteristics, FILE_DEVICE_SECURE_OPEN);
 		}
 
 		PDEVICE_EXTENSION pDeviceExtension = (PDEVICE_EXTENSION)pFilterDeviceObject->DeviceExtension;
-		if ( NULL == pDeviceExtension) {
+		if ( NULL == pDeviceExtension) 
+		{
 			KdPrint(("FileSystemFilter!FSAttachFileSystemControlDevice: "
 				"The device extension's address is invalid.\r\n"));
 			status = STATUS_INVALID_ADDRESS;
@@ -416,22 +469,24 @@ NTSTATUS FSAttachToFileSystemControlDevice(IN PDEVICE_OBJECT pDeviceObject, IN P
 
 		status = IoAttachDeviceToDeviceStackSafe(pFilterDeviceObject, pDeviceObject, &pDeviceExtension->pstNextDeviceObject);
 
-		if (!NT_SUCCESS(status)) {
+		if (!NT_SUCCESS(status)) 
+		{
 			KdPrint(("FileSystemFilter!FSAttachFileSystemControlDevice: "
 				"Attach device failed.\r\n"));
 			break;
 		}
 
-		//record  name of device is attached
+		//Record  name of device is attached
 		RtlInitEmptyUnicodeString(&pDeviceExtension->ustrDeviceName, pDeviceExtension->awcDeviceObjectBuffer, sizeof(pDeviceExtension->awcDeviceObjectBuffer));
 		RtlCopyUnicodeString(&pDeviceExtension->ustrDeviceName, pDeviceObjectName);
 
 
-		//set the device initialized finished
+		//Set the device initialized finished
 		ClearFlag(pFilterDeviceObject->Flags, DO_DEVICE_INITIALIZING);
 
 		status = FSAttachToMountedVolumeDevice(pDeviceObject);
-		if (!NT_SUCCESS(status)) {
+		if (!NT_SUCCESS(status)) 
+		{
 			KdPrint(("FileSystemFilter!FSAttachFileSystemControlDevice: "
 				"Attach volume device failed.\r\n"));
 		}
@@ -446,15 +501,19 @@ NTSTATUS FSAttachToFileSystemControlDevice(IN PDEVICE_OBJECT pDeviceObject, IN P
 	return status;
 }
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Traversing all attached device to find our filter device,detach and delete it.
+**************************************************/
 #pragma PAGEDCODE
 NTSTATUS FSDetachFromFileSystemControlDevice(IN PDEVICE_OBJECT pDeviceObject)
 {
-	if (!ARGUMENT_PRESENT(pDeviceObject)) {
-		KdPrint(
-			("FilterSystemFilter!FSDetachFromFileSystemControlDevice: "
-				"The file system device object is invalid.\r\n");
-		);
+	if (!ARGUMENT_PRESENT(pDeviceObject)) 
+	{
+		KdPrint(("FilterSystemFilter!FSDetachFromFileSystemControlDevice: "
+				"The file system device object is invalid.\r\n"));
 		return STATUS_INVALID_PARAMETER;
 	}
 
@@ -464,8 +523,10 @@ NTSTATUS FSDetachFromFileSystemControlDevice(IN PDEVICE_OBJECT pDeviceObject)
 	PDEVICE_EXTENSION pDeviceExtension = NULL;
 
 	pAttachedDeviceObject = IoGetAttachedDeviceReference(pDeviceObject);
-	while (pDeviceObject != pAttachedDeviceObject) {
-		if (IS_MY_DEVICE_OBJECT(pAttachedDeviceObject)) {
+	while (pDeviceObject != pAttachedDeviceObject) 
+	{
+		if (IS_MY_DEVICE_OBJECT(pAttachedDeviceObject)) 
+		{
 			KdPrint(("Detach control deivce filter of %wZ",
 				&pDeviceExtension->ustrDeviceName));
 

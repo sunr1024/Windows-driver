@@ -1,5 +1,10 @@
 #include"entry.h"
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 BOOLEAN FSFastIoCheckIfPossible(IN PFILE_OBJECT pFileObject,
 	IN PLARGE_INTEGER pFileOffset,
 	IN ULONG ulLength,
@@ -22,7 +27,12 @@ BOOLEAN FSFastIoCheckIfPossible(IN PFILE_OBJECT pFileObject,
 }
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoRead(IN PFILE_OBJECT pFileObject,
 	IN PLARGE_INTEGER pFileOffset,
@@ -46,7 +56,12 @@ BOOLEAN FSFastIoRead(IN PFILE_OBJECT pFileObject,
 } 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoWrite(IN PFILE_OBJECT pFileObject,
 	IN PLARGE_INTEGER pFileOffset,
@@ -70,7 +85,12 @@ BOOLEAN FSFastIoWrite(IN PFILE_OBJECT pFileObject,
 }
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoQueryBasicInfo(IN PFILE_OBJECT FileObject,
 	IN BOOLEAN Wait,
@@ -89,7 +109,12 @@ BOOLEAN FSFastIoQueryBasicInfo(IN PFILE_OBJECT FileObject,
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoQueryStandardInfo(
 	IN PFILE_OBJECT pFileObject,
@@ -110,7 +135,12 @@ BOOLEAN FSFastIoQueryStandardInfo(
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoQueryOpen(
 	IN PIRP pIrp,
@@ -128,7 +158,12 @@ BOOLEAN FSFastIoQueryOpen(
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoQueryNetworkOpenInfo(
 	IN PFILE_OBJECT pFileObject,
@@ -150,8 +185,12 @@ BOOLEAN FSFastIoQueryNetworkOpenInfo(
 
 
 
-
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoLock(IN PFILE_OBJECT pFileObject,
 	IN PLARGE_INTEGER pFileOffset,
@@ -179,7 +218,12 @@ BOOLEAN FSFastIoLock(IN PFILE_OBJECT pFileObject,
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoUnlockAll(IN PFILE_OBJECT pFileObject,
 	IN PEPROCESS pProcessId,
@@ -198,7 +242,12 @@ BOOLEAN FSFastIoUnlockAll(IN PFILE_OBJECT pFileObject,
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoUnlockSingle(IN PFILE_OBJECT pFileObject,
 	IN PLARGE_INTEGER pFileOffset,
@@ -223,7 +272,12 @@ BOOLEAN FSFastIoUnlockSingle(IN PFILE_OBJECT pFileObject,
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoUnlockAllByKey(IN PFILE_OBJECT pFileObject,
 	IN PVOID pProcessId,
@@ -243,7 +297,12 @@ BOOLEAN FSFastIoUnlockAllByKey(IN PFILE_OBJECT pFileObject,
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoDeviceControl(IN PFILE_OBJECT pFileObject,
 	IN BOOLEAN bWait,
@@ -271,7 +330,12 @@ BOOLEAN FSFastIoDeviceControl(IN PFILE_OBJECT pFileObject,
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 VOID FSFastIoDetachDevice(IN PDEVICE_OBJECT pSourceDevice,
 	IN PDEVICE_OBJECT pTargetDevice)
@@ -285,7 +349,12 @@ VOID FSFastIoDetachDevice(IN PDEVICE_OBJECT pSourceDevice,
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoMdlRead(IN PFILE_OBJECT pFileObject,
 	IN PLARGE_INTEGER pFileOffset,
@@ -310,7 +379,12 @@ BOOLEAN FSFastIoMdlRead(IN PFILE_OBJECT pFileObject,
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoMdlReadComplete(IN PFILE_OBJECT pFileObject,
 	IN PMDL pMdlChain,
@@ -327,7 +401,12 @@ BOOLEAN FSFastIoMdlReadComplete(IN PFILE_OBJECT pFileObject,
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoMdlReadCompleteCompressed(
 	IN PFILE_OBJECT pFileObject,
@@ -344,7 +423,12 @@ BOOLEAN FSFastIoMdlReadCompleteCompressed(
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoPrepareMdlWrite(IN PFILE_OBJECT pFileObject,
 	IN PLARGE_INTEGER pFileOffset,
@@ -367,7 +451,12 @@ BOOLEAN FSFastIoPrepareMdlWrite(IN PFILE_OBJECT pFileObject,
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoMdlWriteComplete(IN PFILE_OBJECT pFileObject,
 	IN PLARGE_INTEGER pFileOffset,
@@ -385,7 +474,12 @@ BOOLEAN FSFastIoMdlWriteComplete(IN PFILE_OBJECT pFileObject,
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 BOOLEAN FSFastIoMdlWriteCompleteCompressed(
 	IN PFILE_OBJECT pFileObject,
@@ -406,7 +500,13 @@ BOOLEAN FSFastIoMdlWriteCompleteCompressed(
 
 
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
+#pragma PAGEDCODE
 BOOLEAN FSFastIoReadCompressed(
 	IN PFILE_OBJECT pFileObject,
 	IN PLARGE_INTEGER pFileOffset,
@@ -434,6 +534,13 @@ BOOLEAN FSFastIoReadCompressed(
 	return FALSE;
 }
 
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
+#pragma PAGEDCODE
 BOOLEAN FSFastIoWriteCompressed(
 	IN PFILE_OBJECT pFileObject,
 	IN PLARGE_INTEGER pFileOffset,
@@ -459,6 +566,5 @@ BOOLEAN FSFastIoWriteCompressed(
 	UNREFERENCED_PARAMETER(pDeviceObject);
 
 	return FALSE;
-
-} //! FSFastIoWriteCompressed() END
+} 
 

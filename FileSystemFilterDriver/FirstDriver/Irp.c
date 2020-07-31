@@ -1,5 +1,11 @@
 #include"entry.h"
 
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Noting to do..
+**************************************************/
 #pragma PAGEDCODE
 NTSTATUS FSIrpDefault(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 {
@@ -15,11 +21,53 @@ NTSTATUS FSIrpDefault(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 	return IoCallDriver(pDeviceExtension->pstNextDeviceObject, pIrp);
 }
 
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Get file deldte operation information.
+**************************************************/
+#pragma PAGECODE
+NTSTATUS FSIrpSetInfo(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
+{
+	PAGED_CODE();
+	if (IS_MY_CONTROL_DEVICE_OBJECT(pDeviceObject)) {
+		pIrp->IoStatus.Status = STATUS_INVALID_DEVICE_REQUEST;
+		pIrp->IoStatus.Information = 0;
+		IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+		return STATUS_INVALID_DEVICE_REQUEST;
+	}
+
+	PDEVICE_EXTENSION pDeviceExtension = (PDEVICE_EXTENSION)pDeviceObject->DeviceExtension;
+
+	//Check  it's a volume device or not
+	if (NULL == pDeviceExtension->pstStorageDeviceObject) {
+		return FSIrpDefault(pDeviceObject, pIrp);
+	}
+
+	PIO_STACK_LOCATION pStackLocation = IoGetCurrentIrpStackLocation(pIrp);
 
 
-//do some check, then set complete routine and print size of data block when read successful. 
-#pragma PAGEDCODE
-NTSTATUS FSIrpRead(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
+	BOOLEAN tag = pIrp->AssociatedIrp.SystemBuffer;
+	if (pStackLocation->Parameters.SetFile.FileInformationClass == FileDispositionInformation) {
+		if (tag == TRUE) {
+			KdPrint(("Delete File\n"));
+		}
+	}
+
+	IoSkipCurrentIrpStackLocation(pIrp);
+	return IoCallDriver(pDeviceExtension->pstNextDeviceObject, pIrp);
+}
+
+
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Do some check, then set complete routine and print size of data block when read successful.
+**************************************************/
+#pragma PAGECODE
+NTSTATUS FSIrpCreate(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 {
 	PAGED_CODE();
 	NTSTATUS status = STATUS_UNSUCCESSFUL;
@@ -32,25 +80,21 @@ NTSTATUS FSIrpRead(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 
 	PDEVICE_EXTENSION pDeviceExtension = (PDEVICE_EXTENSION)pDeviceObject->DeviceExtension;
 
-	//check  it's a volume device or not
+	//Check  it's a volume device or not
 	if (NULL == pDeviceExtension->pstStorageDeviceObject) {
 		return FSIrpDefault(pDeviceObject, pIrp);
 	}
 
 	PIO_STACK_LOCATION pStackLocation = IoGetCurrentIrpStackLocation(pIrp);
-	LARGE_INTEGER stOffset = { 0 };
-	ULONG ulLength = 0;
 
-	//get offset and length
-	stOffset.QuadPart = pStackLocation->Parameters.Read.ByteOffset.QuadPart;
-	ulLength = pStackLocation->Parameters.Read.Length;
+	ULONG options = pStackLocation->Parameters.Create.Options;
 
-	//set complete routine and wait event complete
+	//Set complete routine and wait event complete
 	KEVENT waitEvent;
 	KeInitializeEvent(&waitEvent, NotificationEvent, FALSE);
 
 	IoCopyCurrentIrpStackLocationToNext(pIrp);
-	IoSetCompletionRoutine(pIrp, FSReadComplete, &waitEvent, TRUE, TRUE, TRUE);
+	IoSetCompletionRoutine(pIrp, FSCreateComplete, &waitEvent, TRUE, TRUE, TRUE);
 
 	status = IoCallDriver(pDeviceExtension->pstNextDeviceObject, pIrp);
 
@@ -58,33 +102,32 @@ NTSTATUS FSIrpRead(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 		status = KeWaitForSingleObject(&waitEvent, Executive, KernelMode, FALSE, NULL);
 		ASSERT(STATUS_SUCCESS == status);
 	}
-
-	if (NT_SUCCESS(pIrp->IoStatus.Status)) {
-		PVOID pBuffer = NULL;
-		if (NULL != pIrp->MdlAddress) {
-			pBuffer = MmGetSystemAddressForMdlSafe(pIrp->MdlAddress, NormalPagePriority);
-		}
-		else {
-			pBuffer = pIrp->UserBuffer;
-		}
-
-		if (NULL != pBuffer) {
-			ulLength = pIrp->IoStatus.Information;
-
-			KdPrint(("Read irp: the size is %ul \r\n", ulLength));
-		}
+	if ((options&FILE_DIRECTORY_FILE) != 0) {
+		//KdPrint(("Create/Open File		"));
+		//FSGetFileName(pStackLocation->FileObject);
 	}
+	else {
+		//KdPrint(("Create/Open Directory		"));
+		//FSGetFileName(pStackLocation->FileObject);
+	}
+	
 
 	IoCompleteRequest(pIrp, IO_NO_INCREMENT);
 	return pIrp->IoStatus.Information;
 }
 
-
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Do some check, then set complete routine and print size of data block when close successful.
+**************************************************/
 #pragma PAGEDCODE
-NTSTATUS FSIrpWrite(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
+NTSTATUS FSIrpClose(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 {
 	PAGED_CODE();
-	if (IS_MY_DEVICE_OBJECT(pDeviceObject)) {
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
+	if (IS_MY_CONTROL_DEVICE_OBJECT(pDeviceObject)) {
 		pIrp->IoStatus.Status = STATUS_INVALID_DEVICE_REQUEST;
 		pIrp->IoStatus.Information = 0;
 		IoCompleteRequest(pIrp, IO_NO_INCREMENT);
@@ -93,37 +136,159 @@ NTSTATUS FSIrpWrite(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 
 	PDEVICE_EXTENSION pDeviceExtension = (PDEVICE_EXTENSION)pDeviceObject->DeviceExtension;
 
-	//check  it's a volume device or not
+	//Check  it's a volume device or not
 	if (NULL == pDeviceExtension->pstStorageDeviceObject) {
 		return FSIrpDefault(pDeviceObject, pIrp);
 	}
 
 	PIO_STACK_LOCATION pStackLocation = IoGetCurrentIrpStackLocation(pIrp);
-	//LARGE_INTEGER stOffset = { 0 };
+
+	//Set complete routine and wait event complete
+	KEVENT waitEvent;
+	KeInitializeEvent(&waitEvent, NotificationEvent, FALSE);
+
+	IoCopyCurrentIrpStackLocationToNext(pIrp);
+	IoSetCompletionRoutine(pIrp, FSCloseComplete, &waitEvent, TRUE, TRUE, TRUE);
+
+	status = IoCallDriver(pDeviceExtension->pstNextDeviceObject, pIrp);
+
+	if (STATUS_PENDING == status) {
+		status = KeWaitForSingleObject(&waitEvent, Executive, KernelMode, FALSE, NULL);
+		ASSERT(STATUS_SUCCESS == status);
+	}
+
+	IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+	return pIrp->IoStatus.Information;
+}
+
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Do some check, then set complete routine and print size of data block when read successful. 
+**************************************************/
+#pragma PAGEDCODE
+NTSTATUS FSIrpRead(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
+{
+	PAGED_CODE();
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
+	if (IS_MY_CONTROL_DEVICE_OBJECT(pDeviceObject)) 
+	{
+		pIrp->IoStatus.Status = STATUS_INVALID_DEVICE_REQUEST;
+		pIrp->IoStatus.Information = 0;
+		IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+		return STATUS_INVALID_DEVICE_REQUEST;
+	}
+
+	PDEVICE_EXTENSION pDeviceExtension = (PDEVICE_EXTENSION)pDeviceObject->DeviceExtension;
+
+	//Check  it's a volume device or not
+	if (NULL == pDeviceExtension->pstStorageDeviceObject) 
+	{
+		return FSIrpDefault(pDeviceObject, pIrp);
+	}
+
+	PIO_STACK_LOCATION pStackLocation = IoGetCurrentIrpStackLocation(pIrp);
+	LARGE_INTEGER stOffset = { 0 };
 	ULONG ulLength = 0;
 
-	//get offset and length
-	ulLength = pStackLocation->Parameters.Write.Length;
-	PVOID pBuffer = NULL;
+	//Get offset and length
+	stOffset.QuadPart = pStackLocation->Parameters.Read.ByteOffset.QuadPart;
+	ulLength = pStackLocation->Parameters.Read.Length;
 
-	
-	if (NULL != pIrp->MdlAddress) {
-		pBuffer = MmGetSystemAddressForMdlSafe(pIrp->MdlAddress, NormalPagePriority);
+	//Set complete routine and wait event complete
+	KEVENT waitEvent;
+	KeInitializeEvent(&waitEvent, NotificationEvent, FALSE);
+
+	IoCopyCurrentIrpStackLocationToNext(pIrp);
+	IoSetCompletionRoutine(pIrp, FSReadComplete, &waitEvent, TRUE, TRUE, TRUE);
+
+	status = IoCallDriver(pDeviceExtension->pstNextDeviceObject, pIrp);
+
+	if (STATUS_PENDING == status) 
+	{
+		status = KeWaitForSingleObject(&waitEvent, Executive, KernelMode, FALSE, NULL);
+		ASSERT(STATUS_SUCCESS == status);
 	}
-	else {
+
+	if (NT_SUCCESS(pIrp->IoStatus.Status)) 
+	{
+		PVOID pBuffer = NULL;
+		if (NULL != pIrp->MdlAddress) 
+		{
+			pBuffer = MmGetSystemAddressForMdlSafe(pIrp->MdlAddress, NormalPagePriority);
+		}
+		else 
+		{
+			pBuffer = pIrp->UserBuffer;
+		}
+
+		if (NULL != pBuffer) {
+			ulLength = pIrp->IoStatus.Information;
+
+			//KdPrint(("Read irp: the size is %ul \r\n", ulLength));
+		}
+	}
+
+	IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+	return pIrp->IoStatus.Information;
+}
+
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Do some check, then set complete routine and print size of data block when write successful.
+**************************************************/
+#pragma PAGEDCODE
+NTSTATUS FSIrpWrite(IN PDEVICE_OBJECT pDeviceObject,IN PIRP pIrp)
+{
+	PAGED_CODE();
+	if (IS_MY_CONTROL_DEVICE_OBJECT(pDeviceObject))
+	{
+		pIrp->IoStatus.Status = STATUS_INVALID_DEVICE_REQUEST;
+		pIrp->IoStatus.Information = 0;
+		IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+		return STATUS_INVALID_DEVICE_REQUEST;
+	}
+
+	PDEVICE_EXTENSION pstDeviceExtension = (PDEVICE_EXTENSION)pDeviceObject->DeviceExtension;
+	// Check it's a volume device or not.
+	if (NULL == pstDeviceExtension->pstStorageDeviceObject)
+	{
+		return FSIrpDefault(pDeviceObject, pIrp);
+	}
+
+	PIO_STACK_LOCATION pstStackLocation = IoGetCurrentIrpStackLocation(pIrp);
+	ULONG ulLength = 0;
+
+	// Get offset and length.
+	ulLength = pstStackLocation->Parameters.Write.Length;
+	PVOID pBuffer = NULL;
+	if (NULL != pIrp->MdlAddress)
+	{
+		pBuffer = MmGetSystemAddressForMdlSafe(pIrp->MdlAddress,NormalPagePriority);
+	}
+	else
+	{
 		pBuffer = pIrp->UserBuffer;
 	}
 
-	if (NULL != pBuffer) {
-		KdPrint(("Wirte irp: The request size is %u\r\n",
-			pStackLocation->Parameters.Write.Length));
+	if (NULL != pBuffer)
+	{
+		//KdPrint(("Wirte irp: The request size is %u\r\n",pstStackLocation->Parameters.Write.Length));
 	}
 
 	IoSkipCurrentIrpStackLocation(pIrp);
-	return IoCallDriver(pDeviceExtension->pstNextDeviceObject, pIrp);
-}
+	return IoCallDriver(pstDeviceExtension->pstNextDeviceObject, pIrp);
+} 
 
-//call routine to deal with target minor irp,other irp will pass through to next device.
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Call routine to deal with target minor irp,other irp will pass through to next device.
+**************************************************/
 #pragma PAGEDCODE
 NTSTATUS FSIrpFileSystemControl(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 {
@@ -134,17 +299,23 @@ NTSTATUS FSIrpFileSystemControl(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 	PIO_STACK_LOCATION pStackLocation = IoGetCurrentIrpStackLocation(pIrp);
 	PDEVICE_EXTENSION pDeviceExtension = (PDEVICE_EXTENSION)pDeviceObject->DeviceExtension;
 
-	//deal with minior irp
-	switch (pStackLocation->MinorFunction) {
-	case IRP_MN_MOUNT_VOLUME: {
+	//Deal with minior irp
+	switch (pStackLocation->MinorFunction) 
+	{
+	case IRP_MN_MOUNT_VOLUME: 
+	{
 		return FSMinorIrpMountVolume(pDeviceObject, pIrp);
 	}
-	case IRP_MN_LOAD_FILE_SYSTEM: {
+	case IRP_MN_LOAD_FILE_SYSTEM: 
+	{
 		return FSMinorIrpLoadFileSystem(pDeviceObject, pIrp);
 	}
-	case IRP_MN_USER_FS_REQUEST: {
-		switch (pStackLocation->Parameters.FileSystemControl.FsControlCode){
-		case FSCTL_DISMOUNT_VOLUME: {
+	case IRP_MN_USER_FS_REQUEST: 
+	{
+		switch (pStackLocation->Parameters.FileSystemControl.FsControlCode)
+		{
+		case FSCTL_DISMOUNT_VOLUME: 
+		{
 			KdPrint(("FileSystemFilter!FSIrpFileSystemControl: "
 				"Dismounting volumn %wZ\r\n",
 				&pDeviceExtension->ustrDeviceName));
@@ -154,7 +325,8 @@ NTSTATUS FSIrpFileSystemControl(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 		}
 		break;
 	}
-	default: {
+	default: 
+	{
 		break;
 	}
 	}
@@ -162,7 +334,12 @@ NTSTATUS FSIrpFileSystemControl(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 	return IoCallDriver(pDeviceExtension->pstNextDeviceObject, pIrp);
 }
 
-//create filter device object and wait the volume has mounted successful.Then executive the attached active in complete routine.
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Create filter device object and wait the volume has mounted successful.Then executive the attached active in complete routine.
+**************************************************/
 #pragma PAGEDCODE
 NTSTATUS FSMinorIrpMountVolume(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 {
@@ -173,7 +350,7 @@ NTSTATUS FSMinorIrpMountVolume(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 
 	PIO_STACK_LOCATION pStackLocation = IoGetCurrentIrpStackLocation(pIrp);
 
-	//create volume filter device
+	//Create volume filter device
 	PDEVICE_OBJECT pFilterDeviceObject = NULL;
 	status = IoCreateDevice(g_pstDriverObject, sizeof(DEVICE_EXTENSION), NULL, pDeviceObject->DeviceType, 0, FALSE, &pFilterDeviceObject);
 
@@ -187,16 +364,16 @@ NTSTATUS FSMinorIrpMountVolume(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 		return status;
 	}
 
-	//save storage device object
+	//Save storage device object
 	PDEVICE_EXTENSION pDeviceExtension = (PDEVICE_EXTENSION)pFilterDeviceObject->DeviceExtension;
 
-	//get real device of storage
+	//Get real device of storage
 	KIRQL currentIRQL;
 	IoAcquireVpbSpinLock(&currentIRQL);
 	pDeviceExtension->pstStorageDeviceObject = pStackLocation->Parameters.MountVolume.Vpb->RealDevice;
 	IoReleaseVpbSpinLock(currentIRQL);
 
-	//get and save  storage device name
+	//Get and save storage device name
 	RtlInitEmptyUnicodeString(&pDeviceExtension->ustrDeviceName, pDeviceExtension->awcDeviceObjectBuffer, sizeof(pDeviceExtension->awcDeviceObjectBuffer));
 
 	PUNICODE_STRING pStorageDeviceName = NULL;
@@ -209,7 +386,7 @@ NTSTATUS FSMinorIrpMountVolume(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 		pStorageDeviceName = NULL;
 	}
 
-	//set completion routine and wait
+	//Set completion routine and wait
 	KEVENT waitEvent;
 	KeInitializeEvent(&waitEvent, NotificationEvent, FALSE);
 
@@ -222,7 +399,7 @@ NTSTATUS FSMinorIrpMountVolume(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 		ASSERT(STATUS_SUCCESS == status);
 	}
 
-	//attach the filter device to target device
+	//Attach the filter device to target device
 	status = FSAttachMountedVolume(pFilterDeviceObject, pDeviceObject, pIrp);
 
 	status = pIrp->IoStatus.Status;
@@ -232,7 +409,12 @@ NTSTATUS FSMinorIrpMountVolume(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 	return status;
 }
 
-//get volume device object, check it has attached or not.Delete the filter device if it has attached, or begin to attach.
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Get volume device object, check it has attached or not.Delete the filter device if it has attached, or begin to attach.
+**************************************************/
 #pragma PAGEDCODE
 NTSTATUS FSAttachMountedVolume(IN PDEVICE_OBJECT pFilterDeviceObject, IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 {
@@ -241,25 +423,28 @@ NTSTATUS FSAttachMountedVolume(IN PDEVICE_OBJECT pFilterDeviceObject, IN PDEVICE
 
 	NTSTATUS status = STATUS_UNSUCCESSFUL;
 
-	//get lock
+	//Get lock
 	ExAcquireFastMutex(&g_stAttachLock);
 
 	do
 	{
-		//check the volume install successful or not
-		if (!NT_SUCCESS(pIrp->IoStatus.Status)) {
+		//Check the volume install successful or not
+		if (!NT_SUCCESS(pIrp->IoStatus.Status)) 
+		{
 			IoDeleteDevice(pFilterDeviceObject);
 			break;
 		}
 
-		//check the volume has attached or not
-		if (FSIsAttachedDevice(pDeviceObject)) {
+		//Check the volume has attached or not
+		if (FSIsAttachedDevice(pDeviceObject)) 
+		{
 			IoDeleteDevice(pFilterDeviceObject);
 			break;
 		}
 
 
-		//set flag and characteristic
+		//Set flag and characteristic
+		if (FlagOn(pDeviceObject->Flags, DO_BUFFERED_IO))
 		{
 			SetFlag(pFilterDeviceObject->Flags, DO_BUFFERED_IO);
 		}
@@ -282,7 +467,7 @@ NTSTATUS FSAttachMountedVolume(IN PDEVICE_OBJECT pFilterDeviceObject, IN PDEVICE
 		PDEVICE_OBJECT pVolumeDeviceObject = pDeviceExtension->pstStorageDeviceObject->Vpb->DeviceObject;
 		IoReleaseVpbSpinLock(currentIRQL);
 
-		//try to attach the volume device.The binding may fail because other users happen to be trying to do something special with the disk, such as mount or unmount it.Try again and again to avoid these coincidences as much as possible
+		//Try to attach the volume device.The binding may fail because other users happen to be trying to do something special with the disk, such as mount or unmount it.Try again and again to avoid these coincidences as much as possible
 		for (ULONG i = 0; i < ATTACH_VOLUME_DEVICE_TRY_NUM; i++)
 		{
 			status = IoAttachDeviceToDeviceStackSafe(
@@ -305,14 +490,18 @@ NTSTATUS FSAttachMountedVolume(IN PDEVICE_OBJECT pFilterDeviceObject, IN PDEVICE
 		} 
 	} while (FALSE);
 
-	//release lock
+	//Release lock
 	ExReleaseFastMutex(&g_stAttachLock);
 
 	return status;
 }
 
-
-//detach the filter of file system recognizer,then delete the filter device.Reattach the filter device if load file system failed.
+/**************************************************
+@author		  : Sunr
+@create time  : 20200730
+@last   time  : 20200730
+@description  : Detach the filter of file system recognizer,then delete the filter device.Reattach the filter device if load file system failed.
+**************************************************/
 #pragma PAGEDCODE
 NTSTATUS FSMinorIrpLoadFileSystem(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 {
@@ -322,7 +511,7 @@ NTSTATUS FSMinorIrpLoadFileSystem(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 	NTSTATUS status = STATUS_SUCCESS;
 	PDEVICE_EXTENSION pDeviceExtension = (PDEVICE_EXTENSION)pDeviceObject->DeviceExtension;
 
-	//detach filter device from recognizer device.
+	//Detach filter device from recognizer device.
 	IoDetachDevice(pDeviceExtension->pstNextDeviceObject);
 
 	KEVENT waitEvent;
@@ -339,18 +528,21 @@ NTSTATUS FSMinorIrpLoadFileSystem(IN PDEVICE_OBJECT pDeviceObject, IN PIRP pIrp)
 	IoCopyCurrentIrpStackLocationToNext(pIrp);
 	status = IoCallDriver(pDeviceExtension->pstNextDeviceObject, pIrp);
 
-	if (STATUS_PENDING == status) {
+	if (STATUS_PENDING == status) 
+	{
 		status = KeWaitForSingleObject(&waitEvent, Executive, KernelMode, FALSE, NULL);
 		ASSERT(NT_SUCCESS(status));
 	}
 
-	if (!NT_SUCCESS(pIrp->IoStatus.Status) && STATUS_IMAGE_ALREADY_LOADED != pIrp->IoStatus.Status){
-		//reattach to recongizer
+	if (!NT_SUCCESS(pIrp->IoStatus.Status) && STATUS_IMAGE_ALREADY_LOADED != pIrp->IoStatus.Status)
+	{
+		//Reattach to recongizer
 		status = IoAttachDeviceToDeviceStackSafe(pDeviceObject, pDeviceExtension->pstNextDeviceObject, &pDeviceExtension->pstNextDeviceObject);
 		ASSERT(NT_SUCCESS(status));
 
 	}
-	else {
+	else 
+	{
 		IoDeleteDevice(pDeviceObject);
 	}
 

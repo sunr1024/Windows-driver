@@ -1,6 +1,13 @@
 #pragma once
+/*
+#define PAGEDCODE code_seg("PAGE")
+#define LOCKEDCODE code_seg()
+#define INITCODE code_seg("INIT")
 
-
+#define PAGEDDATA data_seg("PAGE")
+#define LOCKEDDATA data_seg()
+#define INITDATA data_seg("INIT")
+*/
 #define ATTACH_VOLUME_DEVICE_TRY_NUM 16
 #define MAX_DEVICENAME_LEN 512
 #define FAST_IO_DISPATCH_TAG 'FIDT'
